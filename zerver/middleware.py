@@ -14,6 +14,7 @@ from typing import (
     Optional,
     Tuple,
 )
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.conf.urls.i18n import is_language_prefix_patterns_used
@@ -321,8 +322,8 @@ def parse_client(
     # USER_AGENT.
     if req_client is not None:
         return req_client, None
-    if "HTTP_USER_AGENT" in request.META:
-        user_agent: Optional[Dict[str, str]] = parse_user_agent(request.META["HTTP_USER_AGENT"])
+    if "User-Agent" in request.headers:
+        user_agent: Optional[Dict[str, str]] = parse_user_agent(request.headers["User-Agent"])
     else:
         user_agent = None
     if user_agent is None:
@@ -452,7 +453,7 @@ class JsonErrorHandler(MiddlewareMixin):
         self, request: HttpRequest, exception: Exception
     ) -> Optional[HttpResponse]:
         if isinstance(exception, MissingAuthenticationError):
-            if "text/html" in request.META.get("HTTP_ACCEPT", ""):
+            if "text/html" in request.headers.get("Accept", ""):
                 # If this looks like a request from a top-level page in a
                 # browser, send the user to the login page.
                 #
@@ -460,7 +461,9 @@ class JsonErrorHandler(MiddlewareMixin):
                 # execute the likely intent for intentionally visiting
                 # an API endpoint without authentication in a browser,
                 # but that's an unlikely to be done intentionally often.
-                return HttpResponseRedirect(f"{settings.HOME_NOT_LOGGED_IN}?next={request.path}")
+                return HttpResponseRedirect(
+                    f"{settings.HOME_NOT_LOGGED_IN}?{urlencode({'next': request.path})}"
+                )
             if request.path.startswith("/api"):
                 # For API routes, ask for HTTP basic auth (email:apiKey).
                 return json_unauthorized()
@@ -629,9 +632,9 @@ class SetRemoteAddrFromRealIpHeader(MiddlewareMixin):
 
     def process_request(self, request: HttpRequest) -> None:
         try:
-            real_ip = request.META["HTTP_X_REAL_IP"]
+            real_ip = request.headers["X-Real-IP"]
         except KeyError:
-            return None
+            pass
         else:
             request.META["REMOTE_ADDR"] = real_ip
 
