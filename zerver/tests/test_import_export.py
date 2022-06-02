@@ -223,6 +223,7 @@ class ExportFile(ZulipTestCase):
 
         realm_emoji = RealmEmoji.objects.get(author=user)
         file_name = realm_emoji.file_name
+        assert file_name is not None
         assert file_name.endswith(".png")
 
         emoji_path = f"{realm.id}/emoji/images/{file_name}"
@@ -510,6 +511,7 @@ class RealmImportExportTest(ExportFile):
             content="Thumbs up for export",
         )
         message = Message.objects.last()
+        assert message is not None
         consented_user_ids = [self.example_user(user).id for user in ["iago", "hamlet"]]
         do_add_reaction(
             self.example_user("iago"), message, "outbox", "1f4e4", Reaction.UNICODE_EMOJI
@@ -905,7 +907,9 @@ class RealmImportExportTest(ExportFile):
 
         # test recipients
         def get_recipient_stream(r: Realm) -> Recipient:
-            return Stream.objects.get(name="Verona", realm=r).recipient
+            recipient = Stream.objects.get(name="Verona", realm=r).recipient
+            assert recipient is not None
+            return recipient
 
         def get_recipient_user(r: Realm) -> Recipient:
             return UserProfile.objects.get(full_name="Iago", realm=r).recipient
@@ -1175,6 +1179,7 @@ class RealmImportExportTest(ExportFile):
         uploaded_file = Attachment.objects.get(realm=imported_realm)
         self.assert_length(b"zulip!", uploaded_file.size)
 
+        assert settings.LOCAL_UPLOADS_DIR is not None
         attachment_file_path = os.path.join(
             settings.LOCAL_UPLOADS_DIR, "files", uploaded_file.path_id
         )
@@ -1514,10 +1519,10 @@ class SingleUserExportTest(ExportFile):
             reaction_type=None,
         )
         reaction = Reaction.objects.order_by("id").last()
-        assert reaction
 
         @checker
         def zerver_reaction(records: List[Record]) -> None:
+            assert reaction
             (exported_reaction,) = records
             self.assertEqual(
                 exported_reaction,

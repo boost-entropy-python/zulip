@@ -583,10 +583,12 @@ class StripeTestCase(ZulipTestCase):
             else:
                 expected_session_details["type"] = "free_trial_upgrade_from_billing_page"
         else:
+            last_stripe_payment_intent = PaymentIntent.objects.last()
+            assert last_stripe_payment_intent is not None
             expected_session_details["type"] = "upgrade_from_billing_page"
             expected_session_details[
                 "stripe_payment_intent_id"
-            ] = PaymentIntent.objects.last().stripe_payment_intent_id
+            ] = last_stripe_payment_intent.stripe_payment_intent_id
 
         self.assert_details_of_valid_session_from_event_status_endpoint(
             upgrade_json_response.json()["stripe_session_id"], expected_session_details
@@ -835,7 +837,7 @@ class StripeTest(StripeTestCase):
         # Check that we can no longer access /upgrade
         response = self.client_get("/upgrade/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual("/billing/", response.url)
+        self.assertEqual("/billing/", response["Location"])
 
         # Check /billing has the correct information
         with patch("corporate.views.billing_page.timezone_now", return_value=self.now):
@@ -976,7 +978,7 @@ class StripeTest(StripeTestCase):
         # Check that we can no longer access /upgrade
         response = self.client_get("/upgrade/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual("/billing/", response.url)
+        self.assertEqual("/billing/", response["Location"])
 
         # Check /billing has the correct information
         with patch("corporate.views.billing_page.timezone_now", return_value=self.now):
@@ -1534,7 +1536,7 @@ class StripeTest(StripeTestCase):
         # Check that we still get redirected to /upgrade
         response = self.client_get("/billing/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual("/upgrade/", response.url)
+        self.assertEqual("/upgrade/", response["Location"])
 
         [last_event] = stripe.Event.list(limit=1)
         retry_payment_intent_json_response = self.client_post(
@@ -1629,7 +1631,7 @@ class StripeTest(StripeTestCase):
         # Check that we can no longer access /upgrade
         response = self.client_get("/upgrade/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual("/billing/", response.url)
+        self.assertEqual("/billing/", response["Location"])
 
     @mock_stripe()
     def test_upgrade_first_card_fails_and_restart_from_begining(self, *mocks: Mock) -> None:
@@ -1702,7 +1704,7 @@ class StripeTest(StripeTestCase):
         # Check that we still get redirected to /upgrade
         response = self.client_get("/billing/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual("/upgrade/", response.url)
+        self.assertEqual("/upgrade/", response["Location"])
 
         # Try again, with a valid card, after they added a few users
         with patch("corporate.lib.stripe.get_latest_seat_count", return_value=23):
@@ -1761,7 +1763,7 @@ class StripeTest(StripeTestCase):
         # Check that we can no longer access /upgrade
         response = self.client_get("/upgrade/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual("/billing/", response.url)
+        self.assertEqual("/billing/", response["Location"])
 
     def test_upgrade_with_tampered_seat_count(self) -> None:
         hamlet = self.example_user("hamlet")
@@ -2262,7 +2264,7 @@ class StripeTest(StripeTestCase):
 
         response = self.client_get("/upgrade/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/billing/")
+        self.assertEqual(response["Location"], "/billing/")
 
         response = self.client_get("/billing/")
         self.assert_in_success_response(
@@ -2290,7 +2292,7 @@ class StripeTest(StripeTestCase):
         self.login_user(user)
         response = self.client_get("/billing/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual("/upgrade/", response.url)
+        self.assertEqual("/upgrade/", response["Location"])
 
         user.realm.plan_type = Realm.PLAN_TYPE_STANDARD_FREE
         user.realm.save()
@@ -2302,7 +2304,7 @@ class StripeTest(StripeTestCase):
         Customer.objects.create(realm=user.realm, stripe_customer_id="cus_123")
         response = self.client_get("/billing/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual("/upgrade/", response.url)
+        self.assertEqual("/upgrade/", response["Location"])
 
     def test_redirect_for_upgrade_page(self) -> None:
         user = self.example_user("iago")
@@ -2315,7 +2317,7 @@ class StripeTest(StripeTestCase):
         user.realm.save()
         response = self.client_get("/upgrade/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/billing/")
+        self.assertEqual(response["Location"], "/billing/")
 
         user.realm.plan_type = Realm.PLAN_TYPE_LIMITED
         user.realm.save()
@@ -2331,16 +2333,16 @@ class StripeTest(StripeTestCase):
         )
         response = self.client_get("/upgrade/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/billing/")
+        self.assertEqual(response["Location"], "/billing/")
 
         with self.settings(FREE_TRIAL_DAYS=30):
             response = self.client_get("/upgrade/")
             self.assertEqual(response.status_code, 302)
-            self.assertEqual(response.url, "/billing/")
+            self.assertEqual(response["Location"], "/billing/")
 
             response = self.client_get("/upgrade/", {"onboarding": "true"})
             self.assertEqual(response.status_code, 302)
-            self.assertEqual(response.url, "/billing/?onboarding=true")
+            self.assertEqual(response["Location"], "/billing/?onboarding=true")
 
     def test_get_latest_seat_count(self) -> None:
         realm = get_realm("zulip")
@@ -4128,7 +4130,7 @@ class RequiresBillingAccessTest(StripeTestCase):
         self.login_user(self.example_user("hamlet"))
         response = self.client_get("/billing/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual("/upgrade/", response.url)
+        self.assertEqual("/upgrade/", response["Location"])
         # Check that non-admins can sign up and pay
         self.upgrade()
         # Check that the non-admin hamlet can still access /billing

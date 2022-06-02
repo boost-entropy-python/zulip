@@ -56,6 +56,7 @@
 
 ## Sending messages
 * [Open the compose box](/help/open-the-compose-box)
+* [Mastering the compose box](/help/mastering-the-compose-box)
 * [Resize the compose box](/help/resize-the-compose-box)
 * [Format messages using Markdown](/help/format-your-message-using-markdown)
 * [Mention a user or group](/help/mention-a-user-or-group)
@@ -156,6 +157,7 @@
 * [Restrict visibility of email addresses](/help/restrict-visibility-of-email-addresses)
 * [Change a user's role](/help/change-a-users-role)
 * [Change a user's name](/help/change-a-users-name)
+* [Manage a user's stream subscriptions](/help/manage-user-stream-subscriptions)
 * [Restrict name and email changes](/help/restrict-name-and-email-changes)
 * [Restrict profile picture changes](/help/restrict-profile-picture-changes)
 * [Restrict permissions of new members](/help/restrict-permissions-of-new-members)

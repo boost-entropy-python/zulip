@@ -270,6 +270,18 @@ td .button {
     box-shadow: none;
 }
 
+#language_selection_modal {
+    table {
+        width: 90%;
+        margin-top: 20px;
+        border-collapse: separate;
+    }
+
+    td {
+        padding-top: 1px;
+    }
+}
+
 .settings-section {
     display: none;
     width: calc(100% - 40px);
@@ -393,21 +405,6 @@ td .button {
         margin-top: 7px;
         vertical-align: middle;
         display: inline-block;
-    }
-
-    #user-display-settings .setting_default_language {
-        text-decoration: none;
-    }
-
-    #user_default_language_modal {
-        table {
-            width: 90%;
-            margin-top: 20px;
-        }
-
-        td {
-            padding-left: 80px;
-        }
     }
 
     .inline {
@@ -573,8 +570,19 @@ input[type="checkbox"] {
     margin-top: 10px;
 }
 
-#user-display-settings .setting_default_language {
-    margin-left: 20px;
+.language_selection_widget {
+    .title {
+        margin-bottom: 3px;
+    }
+
+    .language_selection_button {
+        text-decoration: none;
+        color: hsl(0, 0%, 20%);
+
+        .fa.fa-pencil {
+            margin-left: 5px;
+        }
+    }
 }
 
 .remove-attachment {

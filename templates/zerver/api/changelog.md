@@ -20,6 +20,11 @@ format used by the Zulip server that they are interacting with.
 
 ## Changes in Zulip 6.0
 
+**Feature level 132**
+
+* [`GET /streams/{stream_id}`](/api/get-stream-by-id):
+  Added new endpoint to get a stream by ID.
+
 **Feature level 131**
 
 * [`GET /user_groups`](/api/get-user-groups),[`POST
@@ -214,7 +219,7 @@ No changes; feature level used for Zulip 5.0 release.
 
 **Feature level 104**
 
-* [`PATCH /realm`]: Added `string_id` parameter for changing an
+* `PATCH /realm`: Added `string_id` parameter for changing an
   organization's subdomain. Currently, this is only allowed for
   changing a demo organization to a normal one.
 
@@ -222,7 +227,8 @@ No changes; feature level used for Zulip 5.0 release.
 
 * [`POST /register`](/api/register-queue): Added `create_web_public_stream_policy`
   policy for which users can create web-public streams.
-* [`PATCH /realm`]: Added support for updating `create_web_public_stream_policy`.
+* [`GET /events`](/api/get-events), `PATCH /realm`: Added support for updating
+  `create_web_public_stream_policy`.
 * [`POST /register`](/api/register-queue): Added `can_create_web_public_streams` boolean
   field to the response.
 
@@ -1035,6 +1041,9 @@ No changes; feature level used for Zulip 3.0 release.
 
 ## Changes in Zulip 2.1
 
+* [`GET /messages`](/api/get-messages): Added support for
+  [search/narrow options](/api/construct-narrow) that use stream/user
+  IDs to specify a message's sender, its stream, and/or its recipient(s).
 * [`GET /users`](/api/get-users): Added `include_custom_profile_fields`
   to request custom profile field data.
 * [`GET /users/me`](/api/get-own-user): Added `avatar_url` field,
@@ -1074,6 +1083,9 @@ No changes; feature level used for Zulip 3.0 release.
 
 ## Changes in Zulip 2.0
 
+* [`PATCH /users/me/subscriptions/muted_topics`](/api/mute-topic):
+  Added support for using stream IDs to specify the stream in which to
+  mute/unmute a topic.
 * [`POST /messages`](/api/send-message): Added support for using user
   IDs and stream IDs for specifying the recipients of a message.
 * [`POST /messages`](/api/send-message), [`POST

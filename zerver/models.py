@@ -83,6 +83,7 @@ from zerver.lib.exceptions import JsonableError, RateLimited
 from zerver.lib.pysa import mark_sanitized
 from zerver.lib.timestamp import datetime_to_timestamp
 from zerver.lib.types import (
+    APIStreamDict,
     DisplayRecipientT,
     ExtendedFieldElement,
     ExtendedValidator,
@@ -295,7 +296,9 @@ class Realm(models.Model):
 
     # Whether organization has given permission to be advertised in the
     # Zulip communities directory.
-    want_advertise_in_communities_directory: bool = models.BooleanField(default=False)
+    want_advertise_in_communities_directory: bool = models.BooleanField(
+        default=False, db_index=True
+    )
 
     # Whether the organization has enabled inline image and URL previews.
     inline_image_preview: bool = models.BooleanField(default=True)
@@ -2481,22 +2484,25 @@ class Stream(models.Model):
     ]
 
     @staticmethod
-    def get_client_data(query: QuerySet) -> List[Dict[str, Any]]:
+    def get_client_data(query: QuerySet) -> List[APIStreamDict]:
         query = query.only(*Stream.API_FIELDS)
         return [row.to_dict() for row in query]
 
-    def to_dict(self) -> Dict[str, Any]:
-        result = {}
-        for field_name in self.API_FIELDS:
-            if field_name == "id":
-                result["stream_id"] = self.id
-                continue
-            elif field_name == "date_created":
-                result["date_created"] = datetime_to_timestamp(self.date_created)
-                continue
-            result[field_name] = getattr(self, field_name)
-        result["is_announcement_only"] = self.stream_post_policy == Stream.STREAM_POST_POLICY_ADMINS
-        return result
+    def to_dict(self) -> APIStreamDict:
+        return APIStreamDict(
+            date_created=datetime_to_timestamp(self.date_created),
+            description=self.description,
+            first_message_id=self.first_message_id,
+            history_public_to_subscribers=self.history_public_to_subscribers,
+            invite_only=self.invite_only,
+            is_web_public=self.is_web_public,
+            message_retention_days=self.message_retention_days,
+            name=self.name,
+            rendered_description=self.rendered_description,
+            stream_id=self.id,
+            stream_post_policy=self.stream_post_policy,
+            is_announcement_only=self.stream_post_policy == Stream.STREAM_POST_POLICY_ADMINS,
+        )
 
     class Meta:
         indexes = [
@@ -2697,6 +2703,7 @@ def get_huddle_recipient(user_profile_ids: Set[int]) -> Recipient:
     # we hit another cache to get the recipient.  We may want to
     # unify our caching strategy here.
     huddle = get_huddle(list(user_profile_ids))
+    assert huddle.recipient is not None
     return huddle.recipient
 
 
