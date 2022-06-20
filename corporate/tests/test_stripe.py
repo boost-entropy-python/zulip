@@ -9,7 +9,18 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from functools import wraps
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+)
 from unittest.mock import Mock, patch
 
 import orjson
@@ -18,7 +29,6 @@ import stripe
 import stripe.util
 from django.conf import settings
 from django.core import signing
-from django.http import HttpResponse
 from django.urls.resolvers import get_resolver
 from django.utils.crypto import get_random_string
 from django.utils.timezone import now as timezone_now
@@ -102,6 +112,9 @@ from zerver.models import (
     get_system_bot,
 )
 from zilencer.models import RemoteZulipServer, RemoteZulipServerAuditLog
+
+if TYPE_CHECKING:
+    from django.test.client import _MonkeyPatchedWSGIResponse as TestHttpResponse
 
 CallableT = TypeVar("CallableT", bound=Callable[..., Any])
 ParamT = ParamSpec("ParamT")
@@ -422,11 +435,11 @@ class StripeTestCase(ZulipTestCase):
         self.next_month = datetime(2012, 2, 2, 3, 4, 5, tzinfo=timezone.utc)
         self.next_year = datetime(2013, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
 
-    def get_signed_seat_count_from_response(self, response: HttpResponse) -> Optional[str]:
+    def get_signed_seat_count_from_response(self, response: "TestHttpResponse") -> Optional[str]:
         match = re.search(r"name=\"signed_seat_count\" value=\"(.+)\"", response.content.decode())
         return match.group(1) if match else None
 
-    def get_salt_from_response(self, response: HttpResponse) -> Optional[str]:
+    def get_salt_from_response(self, response: "TestHttpResponse") -> Optional[str]:
         match = re.search(r"name=\"salt\" value=\"(\w+)\"", response.content.decode())
         return match.group(1) if match else None
 
@@ -458,8 +471,8 @@ class StripeTestCase(ZulipTestCase):
                 "stripe_session_id": stripe_session_id,
             },
         )
-        self.assert_json_success(json_response)
-        self.assertEqual(json_response.json()["session"], expected_details)
+        response_dict = self.assert_json_success(json_response)
+        self.assertEqual(response_dict["session"], expected_details)
 
     def assert_details_of_valid_payment_intent_from_event_status_endpoint(
         self,
@@ -472,8 +485,8 @@ class StripeTestCase(ZulipTestCase):
                 "stripe_payment_intent_id": stripe_payment_intent_id,
             },
         )
-        self.assert_json_success(json_response)
-        self.assertEqual(json_response.json()["payment_intent"], expected_details)
+        response_dict = self.assert_json_success(json_response)
+        self.assertEqual(response_dict["payment_intent"], expected_details)
 
     def trigger_stripe_checkout_session_completed_webhook(
         self,
@@ -533,10 +546,10 @@ class StripeTestCase(ZulipTestCase):
         onboarding: bool = False,
         realm: Optional[Realm] = None,
         payment_method: Optional[stripe.PaymentMethod] = None,
-        upgrade_page_response: HttpResponse = None,
+        upgrade_page_response: Optional["TestHttpResponse"] = None,
         del_args: Sequence[str] = [],
         **kwargs: Any,
-    ) -> HttpResponse:
+    ) -> "TestHttpResponse":
         host_args = {}
         if realm is not None:  # nocoverage: TODO
             host_args["HTTP_HOST"] = realm.host
@@ -590,8 +603,9 @@ class StripeTestCase(ZulipTestCase):
                 "stripe_payment_intent_id"
             ] = last_stripe_payment_intent.stripe_payment_intent_id
 
+        response_dict = self.assert_json_success(upgrade_json_response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            upgrade_json_response.json()["stripe_session_id"], expected_session_details
+            response_dict["stripe_session_id"], expected_session_details
         )
         if payment_method is None:
             payment_method = create_payment_method(
@@ -695,8 +709,10 @@ class StripeTest(StripeTestCase):
             response = self.upgrade()
         [payment_intent] = PaymentIntent.objects.all()
         assert payment_intent.stripe_payment_intent_id is not None
+
+        response_dict = self.assert_json_success(response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            response.json()["stripe_session_id"],
+            response_dict["stripe_session_id"],
             {
                 "type": "upgrade_from_billing_page",
                 "status": "completed",
@@ -1017,8 +1033,10 @@ class StripeTest(StripeTestCase):
             with patch("corporate.lib.stripe.timezone_now", return_value=self.now):
                 response = self.upgrade()
             self.assertEqual(PaymentIntent.objects.count(), 0)
+
+            response_dict = self.assert_json_success(response)
             self.assert_details_of_valid_session_from_event_status_endpoint(
-                response.json()["stripe_session_id"],
+                response_dict["stripe_session_id"],
                 {
                     "type": "free_trial_upgrade_from_billing_page",
                     "status": "completed",
@@ -1233,8 +1251,10 @@ class StripeTest(StripeTestCase):
             with patch("corporate.lib.stripe.timezone_now", return_value=self.now):
                 response = self.upgrade(onboarding=True)
             self.assertEqual(PaymentIntent.objects.all().count(), 0)
+
+            response_dict = self.assert_json_success(response)
             self.assert_details_of_valid_session_from_event_status_endpoint(
-                response.json()["stripe_session_id"],
+                response_dict["stripe_session_id"],
                 {
                     "type": "free_trial_upgrade_from_onboarding_page",
                     "status": "completed",
@@ -1488,8 +1508,9 @@ class StripeTest(StripeTestCase):
             )
 
         [payment_intent] = PaymentIntent.objects.all()
+        response_dict = self.assert_json_success(response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            response.json()["stripe_session_id"],
+            response_dict["stripe_session_id"],
             {
                 "type": "upgrade_from_billing_page",
                 "status": "completed",
@@ -1547,8 +1568,9 @@ class StripeTest(StripeTestCase):
         )
         self.assert_json_success(retry_payment_intent_json_response)
         [payment_intent] = PaymentIntent.objects.all()
+        response_dict = self.assert_json_success(retry_payment_intent_json_response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            retry_payment_intent_json_response.json()["stripe_session_id"],
+            response_dict["stripe_session_id"],
             {
                 "type": "retry_upgrade_with_another_payment_method",
                 "status": "created",
@@ -1568,8 +1590,9 @@ class StripeTest(StripeTestCase):
         )
         self.send_stripe_webhook_events(last_event)
 
+        response_dict = self.assert_json_success(retry_payment_intent_json_response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            retry_payment_intent_json_response.json()["stripe_session_id"],
+            response_dict["stripe_session_id"],
             {
                 "type": "retry_upgrade_with_another_payment_method",
                 "status": "completed",
@@ -1654,8 +1677,9 @@ class StripeTest(StripeTestCase):
 
         [payment_intent] = PaymentIntent.objects.all()
         assert payment_intent.stripe_payment_intent_id is not None
+        response_dict = self.assert_json_success(response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            response.json()["stripe_session_id"],
+            response_dict["stripe_session_id"],
             {
                 "type": "upgrade_from_billing_page",
                 "status": "completed",
@@ -1712,8 +1736,9 @@ class StripeTest(StripeTestCase):
                 response = self.upgrade()
         [second_payment_intent, _] = PaymentIntent.objects.all().order_by("-id")
         assert second_payment_intent.stripe_payment_intent_id is not None
+        response_dict = self.assert_json_success(response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            response.json()["stripe_session_id"],
+            response_dict["stripe_session_id"],
             {
                 "type": "upgrade_from_billing_page",
                 "status": "completed",
@@ -2068,8 +2093,9 @@ class StripeTest(StripeTestCase):
         ), self.assertLogs("corporate.stripe", "WARNING"):
             response = self.upgrade()
 
+        response_dict = self.assert_json_success(response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            response.json()["stripe_session_id"],
+            response_dict["stripe_session_id"],
             {
                 "type": "upgrade_from_billing_page",
                 "status": "completed",
@@ -2095,8 +2121,9 @@ class StripeTest(StripeTestCase):
             response = self.upgrade()
 
         [payment_intent] = PaymentIntent.objects.all().order_by("-id")
+        response_dict = self.assert_json_success(response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            response.json()["stripe_session_id"],
+            response_dict["stripe_session_id"],
             {
                 "type": "upgrade_from_billing_page",
                 "status": "completed",
@@ -2548,8 +2575,9 @@ class StripeTest(StripeTestCase):
         start_session_json_response = self.client_post(
             "/json/billing/session/start_card_update_session"
         )
+        response_dict = self.assert_json_success(start_session_json_response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            start_session_json_response.json()["stripe_session_id"],
+            response_dict["stripe_session_id"],
             {
                 "type": "card_update_from_billing_page",
                 "status": "created",
@@ -2567,8 +2595,9 @@ class StripeTest(StripeTestCase):
         start_session_json_response = self.client_post(
             "/json/billing/session/start_card_update_session"
         )
+        response_dict = self.assert_json_success(start_session_json_response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            start_session_json_response.json()["stripe_session_id"],
+            response_dict["stripe_session_id"],
             {
                 "type": "card_update_from_billing_page",
                 "status": "created",
@@ -2584,8 +2613,9 @@ class StripeTest(StripeTestCase):
                 m.output[0],
                 "INFO:corporate.stripe:Stripe card error: 402 card_error card_declined None",
             )
+        response_dict = self.assert_json_success(start_session_json_response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            start_session_json_response.json()["stripe_session_id"],
+            response_dict["stripe_session_id"],
             {
                 "type": "card_update_from_billing_page",
                 "status": "completed",
@@ -2620,8 +2650,9 @@ class StripeTest(StripeTestCase):
                 )
             )
         )
+        response_dict = self.assert_json_success(start_session_json_response)
         self.assert_details_of_valid_session_from_event_status_endpoint(
-            start_session_json_response.json()["stripe_session_id"],
+            response_dict["stripe_session_id"],
             {
                 "type": "card_update_from_billing_page",
                 "status": "completed",
@@ -2632,7 +2663,7 @@ class StripeTest(StripeTestCase):
         self.login_user(self.example_user("iago"))
         response = self.client_get(
             "/json/billing/event/status",
-            {"stripe_session_id": start_session_json_response.json()["stripe_session_id"]},
+            {"stripe_session_id": response_dict["stripe_session_id"]},
         )
         self.assert_json_error_contains(
             response, "Must be a billing administrator or an organization owner"

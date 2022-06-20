@@ -3340,6 +3340,16 @@ class ArchivedAttachment(AbstractAttachment):
     """Used as a temporary holding place for deleted Attachment objects
     before they are permanently deleted.  This is an important part of
     a robust 'message retention' feature.
+
+    Unlike the similar archive tables, ArchivedAttachment does not
+    have an ArchiveTransaction foreign key, and thus will not be
+    directly deleted by clean_archived_data. Instead, attachments that
+    were only referenced by now fully deleted messages will leave
+    ArchivedAttachment objects with empty `.messages`.
+
+    A second step, delete_old_unclaimed_attachments, will delete the
+    resulting orphaned ArchivedAttachment objects, along with removing
+    the associated uploaded files from storage.
     """
 
     id: int = models.AutoField(auto_created=True, primary_key=True, verbose_name="ID")
@@ -3483,11 +3493,32 @@ def validate_attachment_request(
     ).exists()
 
 
-def get_old_unclaimed_attachments(weeks_ago: int) -> Sequence[Attachment]:
-    # TODO: Change return type to QuerySet[Attachment]
+def get_old_unclaimed_attachments(
+    weeks_ago: int,
+) -> Tuple[QuerySet[Attachment], QuerySet[ArchivedAttachment]]:
+    """
+    The logic in this function is fairly tricky. The essence is that
+    a file should be cleaned up if and only if it not referenced by any
+    Message or ArchivedMessage. The way to find that out is through the
+    Attachment and ArchivedAttachment tables.
+    The queries are complicated by the fact that an uploaded file
+    may have either only an Attachment row, only an ArchivedAttachment row,
+    or both - depending on whether some, all or none of the messages
+    linking to it have been archived.
+    """
     delta_weeks_ago = timezone_now() - datetime.timedelta(weeks=weeks_ago)
-    old_attachments = Attachment.objects.filter(messages=None, create_time__lt=delta_weeks_ago)
-    return old_attachments
+    old_attachments = Attachment.objects.annotate(
+        has_other_messages=Exists(
+            ArchivedAttachment.objects.filter(id=OuterRef("id")).exclude(messages=None)
+        )
+    ).filter(messages=None, create_time__lt=delta_weeks_ago, has_other_messages=False)
+    old_archived_attachments = ArchivedAttachment.objects.annotate(
+        has_other_messages=Exists(
+            Attachment.objects.filter(id=OuterRef("id")).exclude(messages=None)
+        )
+    ).filter(messages=None, create_time__lt=delta_weeks_ago, has_other_messages=False)
+
+    return old_attachments, old_archived_attachments
 
 
 class Subscription(models.Model):
