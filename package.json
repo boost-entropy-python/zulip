@@ -118,7 +118,7 @@
     "prettier": "^2.0.5",
     "puppeteer": "^14.2.0",
     "source-map": "https://codeload.github.com/benthemonkey/source-map/tar.gz/d95423f77edef6cbb9e21d2d6014c7de85ae220a",
-    "stylelint": "^14.0.1",
+    "stylelint": "^15.10.1",
     "stylelint-config-prettier": "^9.0.3",
     "stylelint-config-standard": "^25.0.0",
     "svgo": "^2.0.3",
